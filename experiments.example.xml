@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Example experiment description for experiment.py
+
+  Root element: <run> (or <experiments>)
+  Each <experiment> is executed in order.
+
+  Required tags:  <model>, <prompt>
+  Optional tags:  everything else (defaults shown in comments)
+-->
+<run>
+
+  <!-- Classic SD 1.5 smoke – matches the original smoke_test defaults -->
+  <experiment>
+    <model>stable-diffusion-v1-5/stable-diffusion-v1-5</model>
+    <prompt>a photo of an astronaut riding a horse on mars, highly detailed, 4k</prompt>
+    <negative_prompt>blurry, low quality, deformed, ugly</negative_prompt>
+    <width>512</width>
+    <height>512</height>
+    <dtype>fp32</dtype>                 <!-- recommended for GTX 980 Ti -->
+    <num_images>2</num_images>
+    <batch_size>1</batch_size>
+    <num_inference_steps>20</num_inference_steps>
+    <guidance_scale>7.5</guidance_scale>
+    <seed>42</seed>                     <!-- optional; omit for random -->
+  </experiment>
+
+  <!-- Same model, different prompt, still using the recommended dtype/size -->
+  <experiment>
+    <model>stable-diffusion-v1-5/stable-diffusion-v1-5</model>
+    <prompt>a cyberpunk cityscape at night, neon lights, raining, cinematic</prompt>
+    <negative_prompt>blurry, low quality, cartoon, anime</negative_prompt>
+    <width>512</width>
+    <height>512</height>
+    <dtype>fp32</dtype>
+    <num_images>4</num_images>
+    <batch_size>1</batch_size>
+    <num_inference_steps>25</num_inference_steps>
+    <guidance_scale>8.0</guidance_scale>
+  </experiment>
+
+  <!-- Example that will trigger warnings (non-optimal size + fp16 on Maxwell) -->
+  <!-- Uncomment to test the warning logic
+  <experiment>
+    <model>stable-diffusion-v1-5/stable-diffusion-v1-5</model>
+    <prompt>a tiny mouse exploring a giant library</prompt>
+    <width>768</width>
+    <height>512</height>
+    <dtype>fp16</dtype>
+    <num_images>1</num_images>
+    <batch_size>2</batch_size>
+  </experiment>
+  -->
+
+</run>
