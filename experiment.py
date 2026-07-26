@@ -15,9 +15,13 @@ Usage:
 
 from __future__ import annotations
 
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import argparse
 import json
 import math
+import gc
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -28,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from diffusers import StableDiffusionPipeline
+from diffusers import DiffusionPipeline
 from PIL import Image
 
 
@@ -39,9 +44,34 @@ from PIL import Image
 MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
     "stable-diffusion-v1-5/stable-diffusion-v1-5": {
         "optimal_size": (512, 512),
+        "pipeline":"stablediff",
         "max_batch_fp32": 1,          # safe on 6 GB with attention slicing
         "max_batch_fp16": 2,          # may work, but Maxwell FP16 is limited
         "recommended_dtype": "fp32",  # safest / most compatible on Maxwell
+        "notes": "Classic SD 1.5 – 6 GB VRAM budget is tight",
+    },
+    "Kernel/sd-nsfw": {
+        "optimal_size": (512, 512),
+        "pipeline":"stablediff",
+        "max_batch_fp32": 1,          # safe on 6 GB with attention slicing
+        "max_batch_fp16": 2,          # may work, but Maxwell FP16 is limited
+        "recommended_dtype": "fp32",  # safest / most compatible on Maxwell
+        "notes": "Classic SD 1.5 – 6 GB VRAM budget is tight",
+    },
+    "UnfilteredAI/NSFW-gen-v2.1": {
+        "optimal_size": (512, 512),
+        "pipeline":"diff",
+        "max_batch_fp32": 1,          # safe on 6 GB with attention slicing
+        "max_batch_fp16": 2,          # may work, but Maxwell FP16 is limited
+        "recommended_dtype": "fp32",  # safest / most compatible on Maxwell
+        "notes": "Classic SD 1.5 – 6 GB VRAM budget is tight",
+    },
+    "Heartsync/NSFW-Uncensored": {
+        "optimal_size": (768, 768),
+        "pipeline":"diff",
+        "max_batch_fp32": 1,          # safe on 6 GB with attention slicing
+        "max_batch_fp16": 2,          # may work, but Maxwell FP16 is limited
+        "recommended_dtype": "fp16",  # safest / most compatible on Maxwell
         "notes": "Classic SD 1.5 – 6 GB VRAM budget is tight",
     },
     "runwayml/stable-diffusion-v1-5": {  # alias / older name
@@ -96,7 +126,7 @@ def now_ts() -> str:
 
 
 def warn(msg: str) -> None:
-    print(f"⚠️  WARNING: {msg}", file=sys.stderr)
+    print(f"  WARNING: {msg}", file=sys.stderr)
 
 
 def check_against_model_config(spec: ExperimentSpec) -> None:
@@ -183,18 +213,33 @@ def parse_experiments_xml(path: Path) -> List[ExperimentSpec]:
     return specs
 
 
-def create_pipeline(model_id: str, dtype: torch.dtype, device: torch.device) -> Tuple[StableDiffusionPipeline, float]:
+def create_pipeline(model_id: str, dtype: torch.dtype, device: torch.device):
     print(f"  Loading pipeline {model_id}  dtype={dtype} …")
     t0 = time.perf_counter()
-    pipe = StableDiffusionPipeline.from_pretrained(
-        model_id,
-        torch_dtype=dtype,
-        safety_checker=None,
-        requires_safety_checker=False,
-    )
-    pipe = pipe.to(device)
-    # Always enable attention slicing – cheap win on 6 GB cards
+    cfg = MODEL_CONFIGS.get(model_id)
+    if cfg is None:
+        warn(f"ERR:Model {model_id} has no entry in MODEL_CONFIGS – \n")
+        return
+
+    pipeline = cfg["pipeline"]
+    warn(f"Requested pipeline {pipeline}")
+             
+    if (pipeline == "stablediff"):
+        pipe = StableDiffusionPipeline.from_pretrained(
+            model_id,
+            torch_dtype=dtype,
+            safety_checker=None,
+            requires_safety_checker=False,
+        )
+    if (pipeline == "diff"):
+        pipe = DiffusionPipeline.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16
+        )
     pipe.enable_attention_slicing()
+    pipe.enable_sequential_cpu_offload()
+    #pipe = pipe.to(device)
+    # Always enable attention slicing – cheap win on 6 GB cards
     load_s = time.perf_counter() - t0
     print(f"  Pipeline ready in {load_s:.1f}s")
     return pipe, load_s
@@ -411,7 +456,8 @@ def main() -> int:
 
     for spec in specs:
         # Subfolder: 001_YYYYMMDD_HHMMSS  (optionally append a short slug)
-        slug = "".join(c if c.isalnum() else "_" for c in spec.prompt[:40]).strip("_")
+        #slug = "".join(c if c.isalnum() else "_" for c in spec.prompt[:40]).strip("_")
+        slug = spec.model[:40].replace("/", "_")
         exp_ts = now_ts()
         exp_name = f"{spec.index:03d}_{exp_ts}_{slug}"
         exp_dir = run_dir / exp_name
@@ -419,6 +465,11 @@ def main() -> int:
         print(f"── Experiment {spec.index:03d}  {spec.model}")
         print(f"   prompt: {spec.prompt[:70]}{'…' if len(spec.prompt) > 70 else ''}")
 
+        # 1. run Python-Garbage 
+        gc.collect()
+
+        # 2. clean PyTorch-VRAM-Cache completely
+        torch.cuda.empty_cache()
         try:
             run_experiment(spec, exp_dir, device, run_info)
         except Exception as exc:
