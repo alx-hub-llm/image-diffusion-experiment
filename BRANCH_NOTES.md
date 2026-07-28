@@ -1,34 +1,28 @@
-# Branch 01 – queue-and-naming
+# Branch 02 – flatten-and-summary
+
+Built on top of `01-queue-and-naming`.
 
 ## What changed
 
-### Queue mode (default when no argument is given)
-- Scan `experiments/pending/` for `*.xml`
-- Process each file in turn
-- On success move the XML to `experiments/done/`
-- Failed files stay in `pending/` so they can be retried
+### Flattened experiment folder
+Images, `meta.json` and `performance.log` now live **in the same directory**:
 
-### Single-file mode still works
-```bash
-python experiment.py path/to/file.xml
+```
+runs/<xml-stem>_<ts>/
+├── 001_<ts>_<model>/
+│   ├── 0000.png
+│   ├── 0001.png
+│   ├── meta.json
+│   └── performance.log
+├── 002_…
+├── <original>.xml          ← copy of the source XML
+└── run_summary.json        ← aggregate of the whole run
 ```
 
-### Run folder naming
-```
-runs/<xml-stem>_<YYYYMMDD_HHMMSS>/
-```
-Example: `runs/astronaut_mars_20260728_161200/`
+No nested `images/` sub-folder any more.
 
-### New CLI flags
-- `--pending-dir` (default `experiments/pending`)
-- `--done-dir`   (default `experiments/done`)
-- `--runs-dir`   (unchanged, default `runs`)
+### run_summary.json
+Contains high-level info for every experiment in the run (model, image count, avg sec/image, size, dtype). Useful for quick overview and later comparison tools.
 
-## How to test
-```bash
-mkdir -p experiments/pending experiments/done
-cp experiments.example.xml experiments/pending/
-python experiment.py          # processes the queue
-ls runs/
-ls experiments/done/
-```
+### Source XML preserved
+The original experiment definition is copied into the run folder so the run is fully self-contained.
