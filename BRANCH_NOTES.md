@@ -1,37 +1,33 @@
-# Branch 03 – richer-metadata
+# Branch 04 – metrics-csv-png-meta
 
-Built on top of `02-flatten-and-summary`.
+Built on top of `03-richer-metadata`.
 
 ## What this branch adds
 
-### Expanded `meta.json`
+### metrics.csv (one row per image / batch)
 
-Each experiment folder now records additional fields for reproducibility and comparison:
+Written into the run folder:
 
-```json
-{
-  "environment": {
-    "python": "3.12.x",
-    "torch": "2.x.x+cu126",
-    "diffusers": "…",
-    "transformers": "…",
-    "accelerate": "…",
-    "cuda_driver": "580.xx"   // from nvidia-smi when available
-  },
-  "warnings": [
-    "size 768×512 differs from optimal 512×512",
-    "dtype=fp16 but recommended is fp32"
-  ],
-  "seeds_used": [42, 43, 44],
-  "git_commit": "a1b2c3d"   // short hash if inside a git repo
-}
+```
+run_id,experiment_index,model,dtype,width,height,steps,guidance,seed,batch,sec_per_image,peak_vram_mb,prompt_hash
+...
 ```
 
-### Implementation approach
+Ready for `pandas`, spreadsheets or any later comparison script.
 
-- `check_against_model_config` returns a list of warning strings instead of only printing them.
-- The list is stored in `meta.json` under the `warnings` key.
-- After each batch the actual seed that was used is appended to `seeds_used`.
-- A small helper gathers package versions and (optionally) the git HEAD.
+### Self-describing PNGs
 
-These fields make later comparison across runs reliable and let you see exactly what the runner decided at runtime.
+Key metadata is embedded as PNG text chunks (via Pillow `PngInfo`):
+
+- prompt / negative_prompt
+- model
+- seed
+- dtype, size, steps, guidance
+- run name + experiment index
+
+An image file alone still carries its origin information.
+
+### Implementation notes
+
+- CSV is written (or appended) after each experiment finishes.
+- PNG metadata is added at save time; no extra post-processing pass needed.
