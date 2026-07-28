@@ -1,28 +1,37 @@
-# Branch 02 – flatten-and-summary
+# Branch 03 – richer-metadata
 
-Built on top of `01-queue-and-naming`.
+Built on top of `02-flatten-and-summary`.
 
-## What changed
+## What this branch adds
 
-### Flattened experiment folder
-Images, `meta.json` and `performance.log` now live **in the same directory**:
+### Expanded `meta.json`
 
+Each experiment folder now records additional fields for reproducibility and comparison:
+
+```json
+{
+  "environment": {
+    "python": "3.12.x",
+    "torch": "2.x.x+cu126",
+    "diffusers": "…",
+    "transformers": "…",
+    "accelerate": "…",
+    "cuda_driver": "580.xx"   // from nvidia-smi when available
+  },
+  "warnings": [
+    "size 768×512 differs from optimal 512×512",
+    "dtype=fp16 but recommended is fp32"
+  ],
+  "seeds_used": [42, 43, 44],
+  "git_commit": "a1b2c3d"   // short hash if inside a git repo
+}
 ```
-runs/<xml-stem>_<ts>/
-├── 001_<ts>_<model>/
-│   ├── 0000.png
-│   ├── 0001.png
-│   ├── meta.json
-│   └── performance.log
-├── 002_…
-├── <original>.xml          ← copy of the source XML
-└── run_summary.json        ← aggregate of the whole run
-```
 
-No nested `images/` sub-folder any more.
+### Implementation approach
 
-### run_summary.json
-Contains high-level info for every experiment in the run (model, image count, avg sec/image, size, dtype). Useful for quick overview and later comparison tools.
+- `check_against_model_config` returns a list of warning strings instead of only printing them.
+- The list is stored in `meta.json` under the `warnings` key.
+- After each batch the actual seed that was used is appended to `seeds_used`.
+- A small helper gathers package versions and (optionally) the git HEAD.
 
-### Source XML preserved
-The original experiment definition is copied into the run folder so the run is fully self-contained.
+These fields make later comparison across runs reliable and let you see exactly what the runner decided at runtime.
