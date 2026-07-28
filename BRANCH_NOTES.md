@@ -1,33 +1,34 @@
-# Branch 04 – metrics-csv-png-meta
+# Branch 05 – resume-and-compare
 
-Built on top of `03-richer-metadata`.
+Built on top of `04-metrics-csv-png-meta`.
 
 ## What this branch adds
 
-### metrics.csv (one row per image / batch)
+### Resume / skip logic
 
-Written into the run folder:
+Before starting an experiment the runner checks whether the target folder already contains the expected number of `.png` files.
 
+- If yes → skip (print a short message) and keep the existing results.
+- If no  → run as usual (or re-run if the previous attempt failed).
+
+This makes it safe to re-launch a queue after an interruption or OOM.
+
+### compare.py
+
+Minimal CLI that loads two (or more) run folders and prints a side-by-side table of the key metrics from their `run_summary.json` / `metrics.csv` files.
+
+```bash
+python compare.py runs/runA_… runs/runB_…
 ```
-run_id,experiment_index,model,dtype,width,height,steps,guidance,seed,batch,sec_per_image,peak_vram_mb,prompt_hash
-...
-```
 
-Ready for `pandas`, spreadsheets or any later comparison script.
+Output is plain text (and optionally a small Markdown table) so you can quickly see which settings were faster / used less VRAM.
 
-### Self-describing PNGs
+### Suggested merge order
 
-Key metadata is embedded as PNG text chunks (via Pillow `PngInfo`):
+1. `01-queue-and-naming`
+2. `02-flatten-and-summary`
+3. `03-richer-metadata`
+4. `04-metrics-csv-png-meta`
+5. `05-resume-and-compare`
 
-- prompt / negative_prompt
-- model
-- seed
-- dtype, size, steps, guidance
-- run name + experiment index
-
-An image file alone still carries its origin information.
-
-### Implementation notes
-
-- CSV is written (or appended) after each experiment finishes.
-- PNG metadata is added at save time; no extra post-processing pass needed.
+Each branch is based on the previous one, so merging them sequentially keeps history clean.
